@@ -51,25 +51,17 @@ int main(int argc, char* argv[])
 {
 	puts("Auto-transcribe v0.1");
 	
-	int i, j, datalen, t_size;
-	double fitness_const;
-	FILE* fp;
+	int datalen, t_size;
+	FILE* wav_fp;
 	wav_info header;
-	double *transform_goal, *transform, *transphase;
+	double *transform, *transphase;
 	int* signal;
-	song* population = malloc(POP_SIZE*sizeof(song));
-	char filename[64];
-	double total_fitness;
-	double max_fitness;
-	int best_ind;
 
 	// Set defaults for the wavelet transform settings
 	process_info p_i = { .sqrtt = 0, .b1 = 16, .b2 = 1, .st = 0,
 	.et = 15, .width = 1000, .height = W_KEYS, .phase = 0, .us = 0 };
 	
 	t_size = p_i.height*p_i.width; // Number of data points in transform
-	
-	srand(time(NULL)); // Seed RNG
 	
 	// Check inputs and return usage message if necessary
 	if (check_inputs(argc, argv, &p_i) < 0)
@@ -80,7 +72,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Attempt to open and check validity of input wav file
-	if (open_wav_r(argv[argc-2],&fp)<0 || check_wav_header(fp,&header)<0)
+	if (open_wav_r(argv[argc-2],&wav_fp)<0 || check_wav_header(wav_fp,&header)<0)
 	{
 		return 1;
 	}
@@ -88,79 +80,24 @@ int main(int argc, char* argv[])
 	// How long the input data is in samples
 	datalen = get_data_len(&header);
 	
-	transform_goal = malloc(t_size*sizeof(double)); // The desired transform
-	transform = malloc(t_size*sizeof(double));		// The transform of an individual
-	transphase = malloc(t_size*sizeof(double));		// The transform phase of an individual
+	transform = malloc(t_size*sizeof(double)); // The wavelet transform (magnitude) of the signal
+	transphase = malloc(t_size*sizeof(double));		// The transform phase
 
-	puts("Reading and transforming input...");
-	read_signal(fp,&header,&signal); // Read input signal into array
+	puts("Reading input...");
+	read_signal(wav_fp,&header,&signal); // Read input signal into array
 	// Wavelet transform on input
-	wavelet_trans(&header, datalen, &p_i, signal, transform_goal, transphase);
+	puts("Transforming input...");
+	wavelet_trans(&header, datalen, &p_i, signal, transform, transphase);
 	// Save output image of input
-	writeToImage(argv[argc-1], &p_i, transform_goal, transphase);
-	// Calculate constant value used for fitness function: set up such that a song with one more
-	// completely correct note will have 3x the fitness than another
-	fitness_const = NOTES_EST*log(3)/initial_err(transform_goal, t_size);
+	puts("Writing output...");
+	writeToImage(argv[argc-1], &p_i, transform, transphase);
 	
-	puts("Loading piano sound files...");
-	init_piano();
-	puts("Starting algorithm...");
-	
-	make_mono(&header); // Change header data to mono
-	datalen = get_data_len(&header);
-	
-	for (i=0; i<NUM_GEN; i++)
-	{
-		printf("Generation %d\n",i);
-		// On first generation create new population
-		if (i==0) gen_pop(population, POP_SIZE, NOTES_EST, datalen);
-		// Otherwise mutate the population
-		else mutate_pop(&population, POP_SIZE, datalen);
-		
-		total_fitness = 0;
-		best_ind = -1;
-		max_fitness = 0;
-		
-		for (j=0; j<POP_SIZE; j++)
-		{
-			song s = population[j];
-			free(signal); // Allow signal to be reallocated by render_music
-			// Convert notes to actual audio data
-			render_music(&s, &signal, &header);
-			// Write audio to wav file for later reference
-			sprintf(filename,"individuals/%d/%d.wav",i,j);
-			write_wav(filename, &header, signal);
-			
-			// Perform wavelet transform on generated audio
-			wavelet_trans(&header, datalen, &p_i, signal, transform, transphase);
-			sprintf(filename,"individuals/%d/%d.bmp",i,j);
-			// Write to image for later reference
-			writeToImage(filename, &p_i, transform, transphase);
-			
-			// Calculate fitness
-			population[j].fitness = exp(-fitness_const*error_fn(transform, transform_goal, t_size));
-			total_fitness += population[j].fitness;
-			if (population[j].fitness > max_fitness)
-			{
-				max_fitness = population[j].fitness;
-				best_ind = j;
-			}
-			
-			// Write song to textual format for later reference
-			sprintf(filename,"individuals/%d/%d.txt",i,j);
-			write_song(&population[j], filename);
-		}
-		printf("Average fitness: %E\n",total_fitness/POP_SIZE);
-		printf("Best fitness: %E, by individual %d\n", max_fitness, best_ind);
-	}
 	
 	// Clean up and free memory
-	dest_piano();
 	free(signal);	
-	free(transform_goal);
 	free(transform);
 	free(transphase);
-	fclose(fp);
+	fclose(wav_fp);
 
 	return 0;
 }
@@ -333,12 +270,18 @@ int wavelet_trans(wav_info* header, int datalen, process_info* pi,
 			w_j[i] = A*exp(-((long long)(i-mid))*(i-mid)/(s*s))*sin(2*PI/T*(i-mid));
 		}
 		
+		
+		
 		// Large negative initial value for last evaluated sample so the first
 		// will always be evaluated
 		last_eval_i = -header->sample_rate*20;
 
 		for (x=0; x<pi->width; x++)
 		{
+			if (y == 114)
+			{
+				printf("x = %d\n", x);
+			}
 			// Sample number to evaluate convolution at
 			i = (x*(pi->et-pi->st)/pi->width+pi->st)*header->sample_rate;
 			// If undersampling is specified, only recalculate convolution values
