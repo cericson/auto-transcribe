@@ -17,11 +17,7 @@
 
 #define PI 3.14159265358979
 #define baseF 27.5		// Lowest frequency on piano
-#define W_KEYS 112		// Upper range of wavelet transform (larger than PIANO_KEYS so harmonics
-						// of higher notes are accounted for)
-#define NOTES_EST 15	// Estimated number of notes in the song
-#define POP_SIZE 100	// Population size
-#define NUM_GEN 100		// Number of generations
+#define W_KEYS 112		// Upper range of wavelet transform (pitches above A0)
 
 // Information for the wavelet transform
 typedef struct process_info
