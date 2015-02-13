@@ -54,7 +54,7 @@ int main(int argc, char* argv[])
 	int datalen, t_size;
 	FILE* fp;
 	wav_info header;
-	double *transform_goal, *transform, *transphase;
+	double *transform, *transphase;
 	int* signal;
 
 	// Set defaults for the wavelet transform settings
@@ -74,30 +74,23 @@ int main(int argc, char* argv[])
 	t_size = p_i.height*p_i.width; // Number of data points in transform
 
 	// Attempt to open and check validity of input wav file
-	if (open_wav_r(argv[argc-2],&fp)<0 || check_wav_header(fp,&header)<0)
-	{
-		return 1;
-	}
+	if (open_wav_r(argv[argc-2],&fp)<0 || check_wav_header(fp,&header)<0) return 1;
 	
 	// How long the input data is in samples
 	datalen = get_data_len(&header);
 	
-	transform_goal = malloc(t_size*sizeof(double)); // The desired transform
 	transform = malloc(t_size*sizeof(double));		// The transform of an individual
 	transphase = malloc(t_size*sizeof(double));		// The transform phase of an individual
 
 	puts("Reading and transforming input...");
 	read_signal(fp,&header,&signal); // Read input signal into array
 	// Wavelet transform on input
-	wavelet_trans(&header, datalen, &p_i, signal, transform_goal, transphase);
+	wavelet_trans(&header, datalen, &p_i, signal, transform, transphase);
 	// Save output image of input
-	writeToImage(argv[argc-1], &p_i, transform_goal, transphase);
-	// Calculate constant value used for fitness function: set up such that a song with one more
-	// completely correct note will have 3x the fitness than another
+	writeToImage(argv[argc-1], &p_i, transform, transphase);
 	
 	// Clean up and free memory
 	free(signal);	
-	free(transform_goal);
 	free(transform);
 	free(transphase);
 	fclose(fp);
